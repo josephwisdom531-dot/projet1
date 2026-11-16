@@ -429,6 +429,14 @@ $voirStatistiques = ($role === "Gerant");
             <p>Ajouter des employés, attribuer les rôles et gérer les accès.</p>
         </a>
         <?php endif; ?>
+        
+<?php if (autorise("reservations", $acces)): ?>
+<a href="reservations.php" class="dashboard-card">
+    <div class="icon">📅</div>
+    <h3>Gestion des réservations</h3>
+    <p>Enregistrer et suivre les réservations des clients.</p>
+</a>
+<?php endif; ?>
 
         <?php if (empty($acces)): ?>
         <div class="aucun-acces">

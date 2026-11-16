@@ -79,7 +79,7 @@ $autorisations = [
     "stock.php" => [
         "Gerant"
     ],
-
+"reservations.php" => ["Gerant", "Caissier", "Serveur"],
     // Gestion des fournisseurs
     "fournisseurs.php" => [
         "Gerant"

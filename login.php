@@ -21,7 +21,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             // Rechercher l'utilisateur
             $requete = $connexion->prepare(
-                "SELECT * FROM utilisateur WHERE email = ?"
+                "SELECT id, nom, prenom, email, mot_de_passe, role, actif
+                 FROM utilisateur
+                 WHERE email = ?
+                 LIMIT 1"
             );
 
             $requete->execute([$email]);
@@ -37,17 +40,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 )
             ) {
 
-                // Créer une nouvelle session sécurisée
-                session_regenerate_id(true);
+                // Vérifier si le compte est actif
+                if ((int)$utilisateur["actif"] !== 1) {
 
-                $_SESSION["utilisateur_id"] = $utilisateur["id"];
-                $_SESSION["nom"] = $utilisateur["nom"];
-                $_SESSION["prenom"] = $utilisateur["prenom"];
-                $_SESSION["email"] = $utilisateur["email"];
+                    $message = "Votre compte est désactivé. Contactez le Gérant.";
 
-                // Envoyer vers le tableau de bord
-                header("Location: index.php");
-                exit;
+                } else {
+
+                    // Sécuriser la session
+                    session_regenerate_id(true);
+
+                    // Enregistrer les informations de l'utilisateur
+                    $_SESSION["utilisateur_id"] = $utilisateur["id"];
+                    $_SESSION["nom"] = $utilisateur["nom"];
+                    $_SESSION["prenom"] = $utilisateur["prenom"];
+                    $_SESSION["email"] = $utilisateur["email"];
+                    $_SESSION["role"] = $utilisateur["role"];
+
+                    // Redirection vers le tableau de bord
+                    header("Location: index.php");
+                    exit;
+                }
 
             } else {
 
@@ -158,35 +171,47 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <?= htmlspecialchars($message) ?>
         </p>
     <?php endif; ?>
-<form method="POST" action="login.php" autocomplete="off">
 
-    <!-- Champs destinés à limiter le remplissage automatique -->
-    <input type="text" name="fake_user" style="display:none" autocomplete="username">
-    <input type="password" name="fake_password" style="display:none" autocomplete="new-password">
+    <form method="POST" action="login.php" autocomplete="off">
 
-    <label for="email">Adresse e-mail</label>
-    <input
-        type="email"
-        id="email"
-        name="email"
-        placeholder="Entrez votre adresse e-mail"
-        autocomplete="off"
-        required
-    >
+        <!-- Champs destinés à limiter le remplissage automatique -->
+        <input type="text" name="fake_user"
+               style="display:none"
+               autocomplete="username">
 
-    <label for="mot_de_passe">Mot de passe</label>
-    <input
-        type="password"
-        id="mot_de_passe"
-        name="mot_de_passe"
-        placeholder="Entrez votre mot de passe"
-        autocomplete="new-password"
-        required
-    >
+        <input type="password" name="fake_password"
+               style="display:none"
+               autocomplete="new-password">
 
-    <button type="submit">Se connecter</button>
+        <label for="email">Adresse e-mail</label>
 
-</form>
+        <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="Entrez votre adresse e-mail"
+            autocomplete="off"
+            readonly
+            onfocus="this.removeAttribute('readonly');"
+            required
+        >
+
+        <label for="mot_de_passe">Mot de passe</label>
+
+        <input
+            type="password"
+            id="mot_de_passe"
+            name="mot_de_passe"
+            placeholder="Entrez votre mot de passe"
+            autocomplete="new-password"
+            readonly
+            onfocus="this.removeAttribute('readonly');"
+            required
+        >
+
+        <button type="submit">Se connecter</button>
+
+    </form>
 
     <div class="lien">
         Pas encore de compte ?

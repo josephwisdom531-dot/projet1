@@ -9,10 +9,28 @@ if (!isset($_SESSION["utilisateur_id"])) {
 
 require_once "connexion.php";
 
+// Récupérer les informations de l'utilisateur connecté
 $nom = $_SESSION["nom"] ?? "";
 $prenom = $_SESSION["prenom"] ?? "";
+$role = $_SESSION["role"] ?? "";
 
-// Statistiques des plats
+// Vérifier que le compte est toujours actif et récupérer son rôle actuel
+$verification = $connexion->prepare(
+    "SELECT role, actif FROM utilisateur WHERE id = ?"
+);
+$verification->execute([$_SESSION["utilisateur_id"]]);
+$utilisateur = $verification->fetch(PDO::FETCH_ASSOC);
+
+if (!$utilisateur || (int)$utilisateur["actif"] !== 1) {
+    session_destroy();
+    header("Location: login.php");
+    exit;
+}
+
+$role = $utilisateur["role"];
+$_SESSION["role"] = $role;
+
+// Statistiques générales
 $totalPlats = $connexion->query(
     "SELECT COUNT(*) FROM plats"
 )->fetchColumn();
@@ -21,7 +39,6 @@ $platsDisponibles = $connexion->query(
     "SELECT COUNT(*) FROM plats WHERE disponible = 1"
 )->fetchColumn();
 
-// Statistiques des commandes
 $totalCommandes = $connexion->query(
     "SELECT COUNT(*) FROM commandes"
 )->fetchColumn();
@@ -30,10 +47,39 @@ $commandesEnAttente = $connexion->query(
     "SELECT COUNT(*) FROM commandes WHERE statut = 'En attente'"
 )->fetchColumn();
 
-// Statistiques des clients
 $totalClients = $connexion->query(
     "SELECT COUNT(*) FROM clients"
 )->fetchColumn();
+
+// Définir les rubriques accessibles selon le rôle
+$permissions = [
+    "Gerant" => [
+        "menu", "ajouter", "commandes", "clients",
+        "tables", "stock", "fournisseurs", "recettes", "employes"
+    ],
+
+    "Caissier" => [
+        "menu", "commandes", "clients", "tables"
+    ],
+
+    "Serveur" => [
+        "menu", "commandes", "clients", "tables"
+    ],
+
+    "Cuisinier" => [
+        "menu", "commandes", "stock", "recettes"
+    ]
+];
+
+// Si le rôle est inconnu, refuser les rubriques
+$acces = $permissions[$role] ?? [];
+
+function autorise($rubrique, $acces) {
+    return in_array($rubrique, $acces, true);
+}
+
+// Seul le Gérant voit les statistiques générales
+$voirStatistiques = ($role === "Gerant");
 ?>
 
 <!DOCTYPE html>
@@ -98,6 +144,17 @@ $totalClients = $connexion->query(
 
         .bienvenue p {
             color: #64748b;
+        }
+
+        .role {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1d4ed8;
+            padding: 7px 13px;
+            border-radius: 20px;
+            margin-top: 12px;
+            font-size: 13px;
+            font-weight: bold;
         }
 
         .section-title {
@@ -167,6 +224,13 @@ $totalClients = $connexion->query(
             font-size: 14px;
         }
 
+        .aucun-acces {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            color: #64748b;
+        }
+
         footer {
             text-align: center;
             padding: 30px;
@@ -220,98 +284,124 @@ $totalClients = $connexion->query(
         </h1>
 
         <p>Voici votre espace de gestion du restaurant.</p>
+
+        <span class="role">
+            Rôle : <?= htmlspecialchars($role) ?>
+        </span>
     </div>
 
-    <h2 class="section-title">Vue d'ensemble</h2>
+    <?php if ($voirStatistiques): ?>
 
-    <div class="statistiques">
+        <h2 class="section-title">Vue d'ensemble</h2>
 
-        <div class="stat-card">
-            <p>Total des plats</p>
-            <h2><?= (int)$totalPlats ?></h2>
+        <div class="statistiques">
+
+            <div class="stat-card">
+                <p>Total des plats</p>
+                <h2><?= (int)$totalPlats ?></h2>
+            </div>
+
+            <div class="stat-card">
+                <p>Plats disponibles</p>
+                <h2><?= (int)$platsDisponibles ?></h2>
+            </div>
+
+            <div class="stat-card">
+                <p>Total des commandes</p>
+                <h2><?= (int)$totalCommandes ?></h2>
+            </div>
+
+            <div class="stat-card">
+                <p>Commandes en attente</p>
+                <h2><?= (int)$commandesEnAttente ?></h2>
+            </div>
+
         </div>
 
-        <div class="stat-card">
-            <p>Plats disponibles</p>
-            <h2><?= (int)$platsDisponibles ?></h2>
-        </div>
-
-        <div class="stat-card">
-            <p>Total des commandes</p>
-            <h2><?= (int)$totalCommandes ?></h2>
-        </div>
-
-        <div class="stat-card">
-            <p>Commandes en attente</p>
-            <h2><?= (int)$commandesEnAttente ?></h2>
-        </div>
-
-    </div>
+    <?php endif; ?>
 
     <h2 class="section-title">Gestion du restaurant</h2>
 
     <div class="dashboard">
 
+        <?php if (autorise("menu", $acces)): ?>
         <a href="menu.php" class="dashboard-card">
             <div class="icon">🍽️</div>
             <h3>Gestion des plats</h3>
-            <p>Consulter, modifier et supprimer les plats du restaurant.</p>
+            <p>Consulter les plats du restaurant.</p>
         </a>
+        <?php endif; ?>
 
+        <?php if (autorise("ajouter", $acces)): ?>
         <a href="ajouter.php" class="dashboard-card">
             <div class="icon">➕</div>
             <h3>Ajouter un plat</h3>
             <p>Enregistrer de nouveaux plats, leurs prix et leurs photos.</p>
         </a>
+        <?php endif; ?>
 
+        <?php if (autorise("commandes", $acces)): ?>
         <a href="commandes.php" class="dashboard-card">
             <div class="icon">🛒</div>
             <h3>Gestion des commandes</h3>
             <p>Enregistrer et suivre les commandes des clients.</p>
         </a>
+        <?php endif; ?>
 
+        <?php if (autorise("clients", $acces)): ?>
         <a href="clients.php" class="dashboard-card">
             <div class="icon">👥</div>
             <h3>Gestion des clients</h3>
-            <p>Ajouter, consulter et gérer les informations des clients.</p>
+            <p>Ajouter et consulter les informations des clients.</p>
         </a>
+        <?php endif; ?>
 
-<a href="tables.php" class="dashboard-card">
-    <div class="icon">🪑</div>
-    <h3>Gestion des tables</h3>
-    <p>
-        Enregistrer les tables du restaurant,
-        gérer leur capacité et suivre leur disponibilité.
-    </p>
-</a>
+        <?php if (autorise("tables", $acces)): ?>
+        <a href="tables.php" class="dashboard-card">
+            <div class="icon">🪑</div>
+            <h3>Gestion des tables</h3>
+            <p>Gérer les tables, leur capacité et leur disponibilité.</p>
+        </a>
+        <?php endif; ?>
 
-<a href="stock.php" class="dashboard-card">
-    <div class="icon">📦</div>
-    <h3>Gestion des stocks</h3>
-    <p>
-        Gérer les ingrédients, les quantités disponibles,
-        les entrées et les sorties de stock.
-    </p>
-</a>
+        <?php if (autorise("stock", $acces)): ?>
+        <a href="stock.php" class="dashboard-card">
+            <div class="icon">📦</div>
+            <h3>Gestion des stocks</h3>
+            <p>Gérer les ingrédients, les quantités et les mouvements de stock.</p>
+        </a>
+        <?php endif; ?>
 
-<a href="fournisseurs.php" class="dashboard-card">
-    <div class="icon">🚚</div>
-    <h3>Gestion des fournisseurs</h3>
-    <p>
-        Enregistrer les fournisseurs, gérer leurs coordonnées
-        et suivre les partenaires du restaurant.
-    </p>
-</a>
+        <?php if (autorise("fournisseurs", $acces)): ?>
+        <a href="fournisseurs.php" class="dashboard-card">
+            <div class="icon">🚚</div>
+            <h3>Gestion des fournisseurs</h3>
+            <p>Enregistrer les fournisseurs et gérer leurs coordonnées.</p>
+        </a>
+        <?php endif; ?>
 
-<a href="recettes.php" class="dashboard-card">
-    <div class="icon">🍲</div>
-    <h3>Gestion des recettes</h3>
-    <p>
-        Associer les ingrédients aux plats,
-        définir les quantités nécessaires et gérer
-        les fiches de préparation.
-    </p>
-</a>
+        <?php if (autorise("recettes", $acces)): ?>
+        <a href="recettes.php" class="dashboard-card">
+            <div class="icon">🍲</div>
+            <h3>Gestion des recettes</h3>
+            <p>Associer les ingrédients aux plats et définir les quantités nécessaires.</p>
+        </a>
+        <?php endif; ?>
+
+        <?php if (autorise("employes", $acces)): ?>
+        <a href="employes.php" class="dashboard-card">
+            <div class="icon">🧑‍💼</div>
+            <h3>Gestion des employés</h3>
+            <p>Ajouter des employés, attribuer les rôles et gérer les accès.</p>
+        </a>
+        <?php endif; ?>
+
+        <?php if (empty($acces)): ?>
+        <div class="aucun-acces">
+            Aucun module ne vous est actuellement attribué.
+            Contactez le Gérant.
+        </div>
+        <?php endif; ?>
 
     </div>
 

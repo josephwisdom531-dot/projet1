@@ -16,18 +16,25 @@ $role = $_SESSION["role"] ?? "";
 
 // Vérifier que le compte est toujours actif et récupérer son rôle actuel
 $verification = $connexion->prepare(
-    "SELECT role, actif FROM utilisateur WHERE id = ?"
+    "SELECT nom, prenom, role, actif FROM utilisateur WHERE id = ?"
 );
 $verification->execute([$_SESSION["utilisateur_id"]]);
 $utilisateur = $verification->fetch(PDO::FETCH_ASSOC);
 
 if (!$utilisateur || (int)$utilisateur["actif"] !== 1) {
+    session_unset();
     session_destroy();
     header("Location: login.php");
     exit;
 }
 
+// Actualiser les informations de session
+$nom = $utilisateur["nom"];
+$prenom = $utilisateur["prenom"];
 $role = $utilisateur["role"];
+
+$_SESSION["nom"] = $nom;
+$_SESSION["prenom"] = $prenom;
 $_SESSION["role"] = $role;
 
 // Statistiques générales
@@ -53,21 +60,40 @@ $totalClients = $connexion->query(
 
 // Définir les rubriques accessibles selon le rôle
 $permissions = [
+
     "Gerant" => [
-        "menu", "ajouter", "commandes", "clients",
-        "tables", "stock", "fournisseurs", "recettes", "employes"
+        "menu",
+        "ajouter",
+        "commandes",
+        "clients",
+        "tables",
+        "stock",
+        "fournisseurs",
+        "recettes",
+        "employes",
+        "paiements"
     ],
 
     "Caissier" => [
-        "menu", "commandes", "clients", "tables"
+        "menu",
+        "commandes",
+        "clients",
+        "tables",
+        "paiements"
     ],
 
     "Serveur" => [
-        "menu", "commandes", "clients", "tables"
+        "menu",
+        "commandes",
+        "clients",
+        "tables"
     ],
 
     "Cuisinier" => [
-        "menu", "commandes", "stock", "recettes"
+        "menu",
+        "commandes",
+        "stock",
+        "recettes"
     ]
 ];
 
@@ -345,6 +371,14 @@ $voirStatistiques = ($role === "Gerant");
             <div class="icon">🛒</div>
             <h3>Gestion des commandes</h3>
             <p>Enregistrer et suivre les commandes des clients.</p>
+        </a>
+        <?php endif; ?>
+
+        <?php if (autorise("paiements", $acces)): ?>
+        <a href="paiements.php" class="dashboard-card">
+            <div class="icon">💳</div>
+            <h3>Gestion des paiements</h3>
+            <p>Encaisser les commandes, gérer les modes de paiement et consulter les paiements effectués.</p>
         </a>
         <?php endif; ?>
 

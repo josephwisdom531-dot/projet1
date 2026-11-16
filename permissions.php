@@ -84,7 +84,7 @@ $autorisations = [
     "fournisseurs.php" => [
         "Gerant"
     ],
-
+"paiements.php" => ["Gerant", "Caissier"],
     // Gestion des recettes
     "recettes.php" => [
         "Gerant", "Cuisinier"
@@ -95,6 +95,7 @@ $autorisations = [
         "Gerant"
     ]
 ];
+
 
 // Identifier la page demandée
 $pageActuelle = basename($_SERVER["PHP_SELF"]);

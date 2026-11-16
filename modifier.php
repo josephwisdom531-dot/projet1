@@ -1,13 +1,7 @@
 
 <?php
-session_start();
-
-if (!isset($_SESSION["utilisateur_id"])) {
-    header("Location: login.php");
-    exit;
-}
-
-require_once "connexion.php";
+// Vérifier les droits d'accès : seul le Gérant est autorisé
+require_once "permissions.php";
 
 // Vérifier l'identifiant du plat
 $id = filter_input(INPUT_GET, "id", FILTER_VALIDATE_INT);
@@ -43,11 +37,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if (
         $nom === "" ||
+        mb_strlen($nom) > 200 ||
         !in_array($categorie, $categories, true) ||
         !is_numeric($prix) ||
         (float)$prix <= 0
     ) {
         $erreur = "Veuillez remplir correctement tous les champs.";
+
     } else {
 
         $anciennePhoto = $plat["photo"];
@@ -62,8 +58,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             if ($_FILES["photo"]["error"] !== UPLOAD_ERR_OK) {
                 $erreur = "Erreur lors de l'envoi de la photo.";
+
             } elseif ($_FILES["photo"]["size"] > 5 * 1024 * 1024) {
                 $erreur = "La photo ne doit pas dépasser 5 Mo.";
+
             } else {
 
                 $finfo = new finfo(FILEINFO_MIME_TYPE);
@@ -77,6 +75,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 if (!isset($extensions[$mime])) {
                     $erreur = "Format refusé. Utilisez JPG, PNG ou WEBP.";
+
                 } else {
 
                     $dossier = __DIR__ . "/images/";
@@ -85,17 +84,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         mkdir($dossier, 0755, true);
                     }
 
-                    $nomFichier = uniqid("plat_", true)
+                    $nomFichier = bin2hex(random_bytes(16))
                         . "." . $extensions[$mime];
 
                     $chemin = $dossier . $nomFichier;
 
-                    if (move_uploaded_file(
-                        $_FILES["photo"]["tmp_name"],
-                        $chemin
-                    )) {
+                    if (
+                        move_uploaded_file(
+                            $_FILES["photo"]["tmp_name"],
+                            $chemin
+                        )
+                    ) {
                         $nouvellePhoto = "images/" . $nomFichier;
                         $photoRemplacee = true;
+
                     } else {
                         $erreur = "Impossible d'enregistrer la nouvelle photo.";
                     }
@@ -107,6 +109,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if ($erreur === "") {
 
             try {
+
                 $requete = $connexion->prepare(
                     "UPDATE plats
                      SET nom_plat = ?,
@@ -128,6 +131,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 // Supprimer l'ancienne photo si elle a été remplacée
                 if ($photoRemplacee && !empty($anciennePhoto)) {
+
                     $ancienChemin = __DIR__ . "/" . $anciennePhoto;
 
                     if (
@@ -145,6 +149,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 // Supprimer la nouvelle photo en cas d'échec SQL
                 if ($photoRemplacee) {
+
                     $nouveauChemin = __DIR__ . "/" . $nouvellePhoto;
 
                     if (is_file($nouveauChemin)) {
@@ -161,17 +166,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Modifier un plat</title>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: Arial, sans-serif;
-            background: #f1f5f9;
+            background: #eef4ff;
             margin: 0;
-            padding: 30px;
+            padding: 30px 15px;
+            color: #1e293b;
         }
 
         .container {
@@ -179,13 +190,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             margin: auto;
             background: white;
             padding: 30px;
-            border-radius: 12px;
+            border-radius: 15px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
         }
 
         h1 {
             text-align: center;
             color: #1e293b;
+            margin-bottom: 25px;
         }
 
         label {
@@ -200,7 +212,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             margin-top: 7px;
             border: 1px solid #cbd5e1;
             border-radius: 7px;
-            box-sizing: border-box;
         }
 
         input[type="checkbox"] {
@@ -246,6 +257,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             color: #2563eb;
             text-decoration: none;
         }
+
+        .retour:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 
@@ -257,62 +272,78 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     <?php if ($erreur !== ""): ?>
         <p class="erreur">
-            <?= htmlspecialchars($erreur) ?>
+            <?= htmlspecialchars($erreur, ENT_QUOTES, "UTF-8") ?>
         </p>
     <?php endif; ?>
 
     <form method="POST" enctype="multipart/form-data">
 
-        <label>Nom du plat</label>
+        <label for="nom_plat">Nom du plat</label>
+
         <input
             type="text"
+            id="nom_plat"
             name="nom_plat"
-            value="<?= htmlspecialchars($_POST["nom_plat"] ?? $plat["nom_plat"]) ?>"
+            maxlength="200"
+            value="<?= htmlspecialchars($_POST["nom_plat"] ?? $plat["nom_plat"], ENT_QUOTES, "UTF-8") ?>"
             required
         >
 
-        <label>Catégorie</label>
-        <select name="categorie" required>
+        <label for="categorie">Catégorie</label>
+
+        <select id="categorie" name="categorie" required>
+
             <?php
             $categorieActuelle = $_POST["categorie"] ?? $plat["categorie"];
             $categories = ["Entrée", "Plat", "Dessert", "Boisson"];
 
             foreach ($categories as $cat):
             ?>
+
                 <option
-                    value="<?= htmlspecialchars($cat) ?>"
+                    value="<?= htmlspecialchars($cat, ENT_QUOTES, "UTF-8") ?>"
                     <?= $categorieActuelle === $cat ? "selected" : "" ?>
                 >
-                    <?= htmlspecialchars($cat) ?>
+                    <?= htmlspecialchars($cat, ENT_QUOTES, "UTF-8") ?>
                 </option>
+
             <?php endforeach; ?>
+
         </select>
 
-        <label>Prix (FCFA)</label>
+        <label for="prix">Prix (FCFA)</label>
+
         <input
             type="number"
+            id="prix"
             name="prix"
-            min="1"
-            step="1"
-            value="<?= htmlspecialchars($_POST["prix"] ?? $plat["prix"]) ?>"
+            min="0.01"
+            step="0.01"
+            value="<?= htmlspecialchars($_POST["prix"] ?? $plat["prix"], ENT_QUOTES, "UTF-8") ?>"
             required
         >
 
         <label>Photo actuelle</label>
 
         <?php if (!empty($plat["photo"]) && is_file(__DIR__ . "/" . $plat["photo"])): ?>
+
             <img
-                src="<?= htmlspecialchars($plat["photo"]) ?>"
+                src="<?= htmlspecialchars($plat["photo"], ENT_QUOTES, "UTF-8") ?>"
                 class="photo"
                 alt="Photo du plat"
             >
+
         <?php else: ?>
+
             <p>Aucune photo disponible.</p>
+
         <?php endif; ?>
 
-        <label>Choisir une nouvelle photo (facultatif)</label>
+        <label for="photo">Choisir une nouvelle photo (facultatif)</label>
+
         <input
             type="file"
+            id="photo"
             name="photo"
             accept=".jpg,.jpeg,.png,.webp"
         >
@@ -327,11 +358,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             Plat disponible
         </label>
 
-        <button type="submit">Enregistrer les modifications</button>
+        <button type="submit">
+            Enregistrer les modifications
+        </button>
 
     </form>
 
-    <a href="menu.php" class="retour">← Retour au menu</a>
+    <a href="menu.php" class="retour">
+        ← Retour au menu
+    </a>
 
 </div>
 

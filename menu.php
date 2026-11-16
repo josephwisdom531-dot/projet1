@@ -1,13 +1,14 @@
 
 <?php
-session_start();
+// Vérifier les autorisations avant tout affichage
+require_once "permissions.php";
 
-if (!isset($_SESSION["utilisateur_id"])) {
-    header("Location: login.php");
-    exit;
-}
+$nom = $_SESSION["nom"] ?? "";
+$prenom = $_SESSION["prenom"] ?? "";
+$role = $_SESSION["role"] ?? "";
 
-require_once "connexion.php";
+$estGerant = ($role === "Gerant");
+
 
 // Récupérer les critères de recherche
 $recherche = trim($_GET["recherche"] ?? "");
@@ -22,7 +23,12 @@ if ($recherche !== "") {
     $parametres[] = "%" . $recherche . "%";
 }
 
-$categories_autorisees = ["Entrée", "Plat", "Dessert", "Boisson"];
+$categories_autorisees = [
+    "Entrée",
+    "Plat",
+    "Dessert",
+    "Boisson"
+];
 
 if (in_array($categorie, $categories_autorisees, true)) {
     $sql .= " AND categorie = ?";
@@ -35,7 +41,6 @@ $requete = $connexion->prepare($sql);
 $requete->execute($parametres);
 $plats = $requete->fetchAll(PDO::FETCH_ASSOC);
 
-// Compter les résultats
 $total_plats = count($plats);
 ?>
 
@@ -259,7 +264,10 @@ $total_plats = count($plats);
 
 <header>
     <h2>Gestion Restaurant</h2>
-    <span>Bienvenue <?= htmlspecialchars($_SESSION["prenom"]) ?></span>
+    <span>
+        Bienvenue <?= htmlspecialchars($prenom) ?>
+        (<?= htmlspecialchars($role) ?>)
+    </span>
 </header>
 
 <div class="conteneur">
@@ -267,12 +275,14 @@ $total_plats = count($plats);
     <div class="entete">
         <div>
             <h1>Gestion de mon menu</h1>
-            <p>Consulte et gère tous les plats de ton restaurant.</p>
+            <p>Consulte les plats de ton restaurant.</p>
         </div>
 
-        <a href="ajouter.php" class="bouton">
-            + Ajouter un plat
-        </a>
+        <?php if ($estGerant): ?>
+            <a href="ajouter.php" class="bouton">
+                + Ajouter un plat
+            </a>
+        <?php endif; ?>
     </div>
 
     <?php if (isset($_GET["ajout"]) && $_GET["ajout"] === "success"): ?>
@@ -333,7 +343,10 @@ $total_plats = count($plats);
 
                 <div class="carte">
 
-                    <?php if (!empty($plat["photo"]) && is_file(__DIR__ . "/" . $plat["photo"])): ?>
+                    <?php if (
+                        !empty($plat["photo"]) &&
+                        is_file(__DIR__ . "/" . $plat["photo"])
+                    ): ?>
 
                         <img
                             src="<?= htmlspecialchars($plat["photo"]) ?>"
@@ -356,11 +369,17 @@ $total_plats = count($plats);
                         </h3>
 
                         <p class="categorie">
-                            Catégorie : <?= htmlspecialchars($plat["categorie"]) ?>
+                            Catégorie :
+                            <?= htmlspecialchars($plat["categorie"]) ?>
                         </p>
 
                         <p class="prix">
-                            <?= number_format((float)$plat["prix"], 0, ",", " ") ?> FCFA
+                            <?= number_format(
+                                (float)$plat["prix"],
+                                0,
+                                ",",
+                                " "
+                            ) ?> FCFA
                         </p>
 
                         <?php if ((int)$plat["disponible"] === 1): ?>
@@ -377,24 +396,28 @@ $total_plats = count($plats);
 
                         <?php endif; ?>
 
-                        <div class="actions">
+                        <?php if ($estGerant): ?>
 
-                            <a
-                                href="modifier.php?id=<?= (int)$plat["id"] ?>"
-                                class="modifier"
-                            >
-                                Modifier
-                            </a>
+                            <div class="actions">
 
-                            <a
-                                href="supprimer.php?id=<?= (int)$plat["id"] ?>"
-                                class="supprimer"
-                                onclick="return confirm('Voulez-vous vraiment supprimer ce plat ?');"
-                            >
-                                Supprimer
-                            </a>
+                                <a
+                                    href="modifier.php?id=<?= (int)$plat["id"] ?>"
+                                    class="modifier"
+                                >
+                                    Modifier
+                                </a>
 
-                        </div>
+                                <a
+                                    href="supprimer.php?id=<?= (int)$plat["id"] ?>"
+                                    class="supprimer"
+                                    onclick="return confirm('Voulez-vous vraiment supprimer ce plat ?');"
+                                >
+                                    Supprimer
+                                </a>
+
+                            </div>
+
+                        <?php endif; ?>
 
                     </div>
 
@@ -408,7 +431,7 @@ $total_plats = count($plats);
 
         <div class="vide">
             <h3>Aucun plat trouvé</h3>
-            <p>Ajoute un plat ou modifie tes critères de recherche.</p>
+            <p>Modifie tes critères de recherche.</p>
         </div>
 
     <?php endif; ?>

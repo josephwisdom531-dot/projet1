@@ -1,13 +1,7 @@
 
 <?php
-session_start();
-
-if (!isset($_SESSION["utilisateur_id"])) {
-    header("Location: login.php");
-    exit;
-}
-
-require_once "connexion.php";
+// Vérifier les droits d'accès de l'utilisateur
+require_once "permissions.php";
 
 $message = "";
 
@@ -20,9 +14,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $categories_autorisees = ["Entrée", "Plat", "Dessert", "Boisson"];
 
-    if ($nom_plat === "" || !in_array($categorie, $categories_autorisees, true)
-        || !is_numeric($prix) || (float)$prix < 0) {
-
+    if (
+        $nom_plat === "" ||
+        !in_array($categorie, $categories_autorisees, true) ||
+        !is_numeric($prix) ||
+        (float)$prix < 0
+    ) {
         $message = "Veuillez vérifier les informations saisies.";
 
     } else {
@@ -30,7 +27,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $photo = null;
 
         // Vérifier et enregistrer la photo
-        if (isset($_FILES["photo"]) && $_FILES["photo"]["error"] !== UPLOAD_ERR_NO_FILE) {
+        if (
+            isset($_FILES["photo"]) &&
+            $_FILES["photo"]["error"] !== UPLOAD_ERR_NO_FILE
+        ) {
 
             if ($_FILES["photo"]["error"] !== UPLOAD_ERR_OK) {
                 $message = "Erreur lors de l'envoi de la photo.";
@@ -62,13 +62,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         mkdir($dossier, 0755, true);
                     }
 
-                    $nom_fichier = bin2hex(random_bytes(16)) . "." . $types_autorises[$type];
+                    $nom_fichier = bin2hex(random_bytes(16))
+                        . "." . $types_autorises[$type];
 
-                    if (move_uploaded_file(
-                        $_FILES["photo"]["tmp_name"],
-                        $dossier . $nom_fichier
-                    )) {
+                    if (
+                        move_uploaded_file(
+                            $_FILES["photo"]["tmp_name"],
+                            $dossier . $nom_fichier
+                        )
+                    ) {
                         $photo = "images/" . $nom_fichier;
+
                     } else {
                         $message = "Impossible d'enregistrer la photo.";
                     }
@@ -82,8 +86,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             try {
 
                 $requete = $connexion->prepare(
-                    "INSERT INTO plats (nom_plat, categorie, prix, disponible, photo)
-                     VALUES (?, ?, ?, ?, ?)"
+                    "INSERT INTO plats
+                    (nom_plat, categorie, prix, disponible, photo)
+                    VALUES (?, ?, ?, ?, ?)"
                 );
 
                 $requete->execute([
@@ -99,7 +104,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             } catch (PDOException $e) {
 
-                if ($photo !== null && file_exists(__DIR__ . "/" . $photo)) {
+                if (
+                    $photo !== null &&
+                    file_exists(__DIR__ . "/" . $photo)
+                ) {
                     unlink(__DIR__ . "/" . $photo);
                 }
 
@@ -171,6 +179,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             margin: 0;
         }
 
+        .disponible label {
+            margin: 0;
+        }
+
         button {
             width: 100%;
             padding: 14px;
@@ -199,6 +211,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             color: #2563eb;
             text-decoration: none;
         }
+
+        .retour:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 
@@ -210,13 +226,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     <?php if ($message !== ""): ?>
         <p class="message">
-            <?= htmlspecialchars($message) ?>
+            <?= htmlspecialchars($message, ENT_QUOTES, "UTF-8") ?>
         </p>
     <?php endif; ?>
 
     <form method="POST" enctype="multipart/form-data">
 
         <label for="nom_plat">Nom du plat</label>
+
         <input
             type="text"
             id="nom_plat"
@@ -227,6 +244,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         >
 
         <label for="categorie">Catégorie</label>
+
         <select id="categorie" name="categorie" required>
             <option value="">Choisir une catégorie</option>
             <option value="Entrée">Entrée</option>
@@ -236,6 +254,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </select>
 
         <label for="prix">Prix (FCFA)</label>
+
         <input
             type="number"
             id="prix"
@@ -247,6 +266,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         >
 
         <label for="photo">Photo du plat</label>
+
         <input
             type="file"
             id="photo"
@@ -261,6 +281,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 name="disponible"
                 checked
             >
+
             <label for="disponible">Plat disponible</label>
         </div>
 
@@ -268,7 +289,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     </form>
 
-    <a href="index.php" class="retour">Retour au tableau de bord</a>
+    <a href="index.php" class="retour">
+        Retour au tableau de bord
+    </a>
 
 </div>
 

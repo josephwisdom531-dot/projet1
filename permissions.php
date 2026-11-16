@@ -1,7 +1,5 @@
 
 <?php
-
-// Démarrer la session si nécessaire
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -14,7 +12,7 @@ if (!isset($_SESSION["utilisateur_id"])) {
     exit;
 }
 
-// Vérifier le compte directement dans la base de données
+// Récupérer les informations actuelles de l'utilisateur
 $verification = $connexion->prepare(
     "SELECT id, nom, prenom, email, role, actif
      FROM utilisateur
@@ -22,10 +20,9 @@ $verification = $connexion->prepare(
 );
 
 $verification->execute([$_SESSION["utilisateur_id"]]);
-
 $utilisateur = $verification->fetch(PDO::FETCH_ASSOC);
 
-// Refuser les comptes inexistants ou désactivés
+// Vérifier si le compte existe et est actif
 if (!$utilisateur || (int)$utilisateur["actif"] !== 1) {
     session_unset();
     session_destroy();
@@ -43,9 +40,12 @@ $_SESSION["role"] = $utilisateur["role"];
 // Définir les autorisations par page
 $autorisations = [
 
-    // Gestion des plats
+    // Menu
     "menu.php" => [
-        "Gerant", "Caissier", "Serveur", "Cuisinier"
+        "Gerant",
+        "Caissier",
+        "Serveur",
+        "Cuisinier"
     ],
 
     "ajouter.php" => [
@@ -60,47 +60,68 @@ $autorisations = [
         "Gerant"
     ],
 
-    // Gestion des commandes
+    // Commandes
     "commandes.php" => [
-        "Gerant", "Caissier", "Serveur", "Cuisinier"
+        "Gerant",
+        "Caissier",
+        "Serveur",
+        "Cuisinier"
     ],
 
-    // Gestion des clients
+    // Clients
     "clients.php" => [
-        "Gerant", "Caissier", "Serveur"
+        "Gerant",
+        "Caissier",
+        "Serveur"
     ],
 
-    // Gestion des tables
+    // Tables
     "tables.php" => [
-        "Gerant", "Caissier", "Serveur"
+        "Gerant",
+        "Caissier",
+        "Serveur"
     ],
 
-    // Gestion du stock
+    // Stock
     "stock.php" => [
-        "Gerant"
+        "Gerant",
+        "Cuisinier"
     ],
-"reservations.php" => ["Gerant", "Caissier", "Serveur"],
-    // Gestion des fournisseurs
+
+    // Fournisseurs
     "fournisseurs.php" => [
         "Gerant"
     ],
-"paiements.php" => ["Gerant", "Caissier"],
-    // Gestion des recettes
+
+    // Recettes
     "recettes.php" => [
-        "Gerant", "Cuisinier"
+        "Gerant",
+        "Cuisinier"
     ],
 
-    // Gestion des employés
+    // Employés
     "employes.php" => [
         "Gerant"
+    ],
+
+    // Paiements
+    "paiements.php" => [
+        "Gerant",
+        "Caissier"
+    ],
+
+    // Réservations
+    "reservations.php" => [
+        "Gerant",
+        "Caissier",
+        "Serveur"
     ]
 ];
 
-
-// Identifier la page demandée
+// Identifier la page actuelle
 $pageActuelle = basename($_SERVER["PHP_SELF"]);
 
-// Vérifier si la page figure dans les autorisations
+// Vérifier si la page est déclarée
 if (!isset($autorisations[$pageActuelle])) {
     http_response_code(403);
     exit("Accès refusé : cette page n'est pas autorisée.");
@@ -114,17 +135,16 @@ if (!in_array(
 )) {
     http_response_code(403);
     ?>
-
     <!DOCTYPE html>
     <html lang="fr">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Accès refusé</title>
-
         <style>
             body {
                 font-family: Arial, sans-serif;
-                background: #f1f5f9;
+                background: #eef4ff;
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -137,17 +157,11 @@ if (!in_array(
                 padding: 35px;
                 border-radius: 12px;
                 text-align: center;
-                max-width: 450px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             }
 
-            h1 {
+            h2 {
                 color: #dc2626;
-            }
-
-            p {
-                color: #64748b;
-                line-height: 1.6;
             }
 
             a {
@@ -157,32 +171,18 @@ if (!in_array(
                 background: #1e293b;
                 color: white;
                 text-decoration: none;
-                border-radius: 7px;
+                border-radius: 6px;
             }
         </style>
     </head>
-
     <body>
-
         <div class="message">
-            <h1>⛔ Accès refusé</h1>
-
-            <p>
-                Vous n'avez pas l'autorisation d'accéder
-                à cette rubrique.
-            </p>
-
-            <p>
-                Contactez le Gérant si vous pensez
-                qu'il s'agit d'une erreur.
-            </p>
-
+            <h2>Accès refusé</h2>
+            <p>Vous n'avez pas les autorisations nécessaires pour accéder à cette page.</p>
             <a href="index.php">Retour au tableau de bord</a>
         </div>
-
     </body>
     </html>
-
     <?php
     exit;
 }

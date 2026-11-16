@@ -10,55 +10,34 @@ if (!isset($_SESSION["utilisateur_id"])) {
 require_once "connexion.php";
 
 // Récupérer les informations de l'utilisateur connecté
-$nom = $_SESSION["nom"] ?? "";
-$prenom = $_SESSION["prenom"] ?? "";
-$role = $_SESSION["role"] ?? "";
-
-// Vérifier que le compte est toujours actif et récupérer son rôle actuel
 $verification = $connexion->prepare(
-    "SELECT nom, prenom, role, actif FROM utilisateur WHERE id = ?"
+    "SELECT id, nom, prenom, role, actif
+     FROM utilisateur
+     WHERE id = ?"
 );
+
 $verification->execute([$_SESSION["utilisateur_id"]]);
 $utilisateur = $verification->fetch(PDO::FETCH_ASSOC);
 
+// Vérifier que le compte est toujours actif
 if (!$utilisateur || (int)$utilisateur["actif"] !== 1) {
     session_unset();
     session_destroy();
+
     header("Location: login.php");
     exit;
 }
 
 // Actualiser les informations de session
+$_SESSION["nom"] = $utilisateur["nom"];
+$_SESSION["prenom"] = $utilisateur["prenom"];
+$_SESSION["role"] = $utilisateur["role"];
+
 $nom = $utilisateur["nom"];
 $prenom = $utilisateur["prenom"];
 $role = $utilisateur["role"];
 
-$_SESSION["nom"] = $nom;
-$_SESSION["prenom"] = $prenom;
-$_SESSION["role"] = $role;
-
-// Statistiques générales
-$totalPlats = $connexion->query(
-    "SELECT COUNT(*) FROM plats"
-)->fetchColumn();
-
-$platsDisponibles = $connexion->query(
-    "SELECT COUNT(*) FROM plats WHERE disponible = 1"
-)->fetchColumn();
-
-$totalCommandes = $connexion->query(
-    "SELECT COUNT(*) FROM commandes"
-)->fetchColumn();
-
-$commandesEnAttente = $connexion->query(
-    "SELECT COUNT(*) FROM commandes WHERE statut = 'En attente'"
-)->fetchColumn();
-
-$totalClients = $connexion->query(
-    "SELECT COUNT(*) FROM clients"
-)->fetchColumn();
-
-// Définir les rubriques accessibles selon le rôle
+// Définir les permissions du tableau de bord
 $permissions = [
 
     "Gerant" => [
@@ -71,7 +50,8 @@ $permissions = [
         "fournisseurs",
         "recettes",
         "employes",
-        "paiements"
+        "paiements",
+        "reservations"
     ],
 
     "Caissier" => [
@@ -79,14 +59,16 @@ $permissions = [
         "commandes",
         "clients",
         "tables",
-        "paiements"
+        "paiements",
+        "reservations"
     ],
 
     "Serveur" => [
         "menu",
         "commandes",
         "clients",
-        "tables"
+        "tables",
+        "reservations"
     ],
 
     "Cuisinier" => [
@@ -97,34 +79,60 @@ $permissions = [
     ]
 ];
 
-// Si le rôle est inconnu, refuser les rubriques
 $acces = $permissions[$role] ?? [];
 
-function autorise($rubrique, $acces) {
-    return in_array($rubrique, $acces, true);
+// Fonction de vérification des autorisations
+function autorise($module, $acces) {
+    return in_array($module, $acces, true);
 }
 
-// Seul le Gérant voit les statistiques générales
-$voirStatistiques = ($role === "Gerant");
+// Statistiques générales
+$totalPlats = 0;
+$platsDisponibles = 0;
+$totalCommandes = 0;
+$commandesEnAttente = 0;
+$totalClients = 0;
+
+if ($role === "Gerant") {
+
+    $totalPlats = (int)$connexion->query(
+        "SELECT COUNT(*) FROM plats"
+    )->fetchColumn();
+
+    $platsDisponibles = (int)$connexion->query(
+        "SELECT COUNT(*) FROM plats WHERE disponible = 1"
+    )->fetchColumn();
+
+    $totalCommandes = (int)$connexion->query(
+        "SELECT COUNT(*) FROM commandes"
+    )->fetchColumn();
+
+    $commandesEnAttente = (int)$connexion->query(
+        "SELECT COUNT(*) FROM commandes
+         WHERE statut = 'En attente'"
+    )->fetchColumn();
+
+    $totalClients = (int)$connexion->query(
+        "SELECT COUNT(*) FROM clients"
+    )->fetchColumn();
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Tableau de bord - Gestion Restaurant</title>
+    <title>Tableau de bord - Restaurant</title>
 
     <style>
         * {
-            margin: 0;
-            padding: 0;
             box-sizing: border-box;
         }
 
         body {
+            margin: 0;
             font-family: Arial, sans-serif;
             background: #f1f5f9;
             color: #1e293b;
@@ -133,7 +141,7 @@ $voirStatistiques = ($role === "Gerant");
         header {
             background: #1e293b;
             color: white;
-            padding: 20px 35px;
+            padding: 22px 35px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -141,151 +149,122 @@ $voirStatistiques = ($role === "Gerant");
             gap: 15px;
         }
 
-        header h2 {
-            font-size: 23px;
+        header h1 {
+            margin: 0;
+            font-size: 25px;
+        }
+
+        .utilisateur {
+            font-size: 14px;
+            line-height: 1.7;
         }
 
         .deconnexion {
             background: #dc2626;
             color: white;
+            padding: 10px 16px;
+            border-radius: 6px;
             text-decoration: none;
-            padding: 11px 18px;
-            border-radius: 7px;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 35px auto;
+        .conteneur {
+            max-width: 1250px;
+            margin: 30px auto;
             padding: 0 20px;
         }
 
         .bienvenue {
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
 
-        .bienvenue h1 {
-            font-size: 27px;
-            margin-bottom: 10px;
-        }
-
-        .bienvenue p {
-            color: #64748b;
-        }
-
-        .role {
-            display: inline-block;
-            background: #dbeafe;
-            color: #1d4ed8;
-            padding: 7px 13px;
-            border-radius: 20px;
-            margin-top: 12px;
-            font-size: 13px;
-            font-weight: bold;
-        }
-
-        .section-title {
-            margin-bottom: 20px;
-            font-size: 22px;
+        .bienvenue h2 {
+            margin-bottom: 8px;
         }
 
         .statistiques {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 18px;
             margin-bottom: 35px;
         }
 
-        .stat-card {
+        .statistique {
             background: white;
-            padding: 23px;
+            padding: 22px;
             border-radius: 12px;
-            box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.06);
         }
 
-        .stat-card p {
+        .statistique h3 {
+            margin: 0 0 12px;
+            font-size: 15px;
             color: #64748b;
-            margin-bottom: 12px;
         }
 
-        .stat-card h2 {
-            font-size: 28px;
-            color: #2563eb;
+        .statistique p {
+            margin: 0;
+            font-size: 27px;
+            font-weight: bold;
         }
 
-        .dashboard {
+        .titre-section {
+            margin-bottom: 20px;
+        }
+
+        .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 22px;
+            gap: 20px;
         }
 
         .dashboard-card {
             background: white;
-            padding: 28px;
+            padding: 25px;
             border-radius: 12px;
             text-decoration: none;
             color: #1e293b;
-            box-shadow: 0 3px 12px rgba(0,0,0,0.05);
-            transition: 0.3s;
-            border: 1px solid #e2e8f0;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+            transition: 0.2s;
         }
 
         .dashboard-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.09);
+            transform: translateY(-4px);
+            box-shadow: 0 7px 18px rgba(0,0,0,0.12);
         }
 
-        .icon {
-            font-size: 38px;
-            margin-bottom: 18px;
+        .dashboard-card .icon {
+            font-size: 35px;
+            margin-bottom: 12px;
         }
 
         .dashboard-card h3 {
-            font-size: 19px;
-            margin-bottom: 10px;
+            margin: 0 0 10px;
         }
 
         .dashboard-card p {
             color: #64748b;
-            line-height: 1.5;
             font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
         }
 
-        .aucun-acces {
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            color: #64748b;
-        }
-
-        footer {
-            text-align: center;
-            padding: 30px;
-            color: #64748b;
-            margin-top: 30px;
-        }
-
-        @media (max-width: 900px) {
-            .statistiques {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .dashboard {
+        @media (max-width: 850px) {
+            .dashboard-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
 
         @media (max-width: 550px) {
             header {
-                padding: 18px;
+                padding: 20px;
             }
 
-            .statistiques,
-            .dashboard {
+            .dashboard-grid {
                 grid-template-columns: 1fr;
             }
 
-            .bienvenue h1 {
-                font-size: 22px;
+            .conteneur {
+                margin-top: 20px;
             }
         }
     </style>
@@ -294,67 +273,71 @@ $voirStatistiques = ($role === "Gerant");
 <body>
 
 <header>
-    <h2>🍽️ Gestion Restaurant</h2>
+    <div>
+        <h1>Tableau de bord - Restaurant</h1>
+        <div class="utilisateur">
+            Bienvenue, <?= htmlspecialchars($prenom . " " . $nom) ?>
+            <br>
+            Fonction : <?= htmlspecialchars($role) ?>
+        </div>
+    </div>
 
     <a href="deconnexion.php" class="deconnexion">
         Déconnexion
     </a>
 </header>
 
-<div class="container">
+<main class="conteneur">
 
-    <div class="bienvenue">
-        <h1>
-            Bienvenue,
-            <?= htmlspecialchars($prenom . " " . $nom) ?> 👋
-        </h1>
+    <section class="bienvenue">
+        <h2>Bienvenue dans votre espace de gestion</h2>
+        <p>Gérez les différentes activités de votre restaurant depuis ce tableau de bord.</p>
+    </section>
 
-        <p>Voici votre espace de gestion du restaurant.</p>
+    <?php if ($role === "Gerant"): ?>
 
-        <span class="role">
-            Rôle : <?= htmlspecialchars($role) ?>
-        </span>
-    </div>
+    <h2 class="titre-section">Statistiques générales</h2>
 
-    <?php if ($voirStatistiques): ?>
+    <section class="statistiques">
 
-        <h2 class="section-title">Vue d'ensemble</h2>
-
-        <div class="statistiques">
-
-            <div class="stat-card">
-                <p>Total des plats</p>
-                <h2><?= (int)$totalPlats ?></h2>
-            </div>
-
-            <div class="stat-card">
-                <p>Plats disponibles</p>
-                <h2><?= (int)$platsDisponibles ?></h2>
-            </div>
-
-            <div class="stat-card">
-                <p>Total des commandes</p>
-                <h2><?= (int)$totalCommandes ?></h2>
-            </div>
-
-            <div class="stat-card">
-                <p>Commandes en attente</p>
-                <h2><?= (int)$commandesEnAttente ?></h2>
-            </div>
-
+        <div class="statistique">
+            <h3>Total des plats</h3>
+            <p><?= $totalPlats ?></p>
         </div>
+
+        <div class="statistique">
+            <h3>Plats disponibles</h3>
+            <p><?= $platsDisponibles ?></p>
+        </div>
+
+        <div class="statistique">
+            <h3>Total des commandes</h3>
+            <p><?= $totalCommandes ?></p>
+        </div>
+
+        <div class="statistique">
+            <h3>Commandes en attente</h3>
+            <p><?= $commandesEnAttente ?></p>
+        </div>
+
+        <div class="statistique">
+            <h3>Total des clients</h3>
+            <p><?= $totalClients ?></p>
+        </div>
+
+    </section>
 
     <?php endif; ?>
 
-    <h2 class="section-title">Gestion du restaurant</h2>
+    <h2 class="titre-section">Gestion du restaurant</h2>
 
-    <div class="dashboard">
+    <section class="dashboard-grid">
 
         <?php if (autorise("menu", $acces)): ?>
         <a href="menu.php" class="dashboard-card">
             <div class="icon">🍽️</div>
-            <h3>Gestion des plats</h3>
-            <p>Consulter les plats du restaurant.</p>
+            <h3>Gestion du menu</h3>
+            <p>Consulter les plats, les catégories et les prix.</p>
         </a>
         <?php endif; ?>
 
@@ -362,23 +345,15 @@ $voirStatistiques = ($role === "Gerant");
         <a href="ajouter.php" class="dashboard-card">
             <div class="icon">➕</div>
             <h3>Ajouter un plat</h3>
-            <p>Enregistrer de nouveaux plats, leurs prix et leurs photos.</p>
+            <p>Enregistrer de nouveaux plats dans le menu.</p>
         </a>
         <?php endif; ?>
 
         <?php if (autorise("commandes", $acces)): ?>
         <a href="commandes.php" class="dashboard-card">
-            <div class="icon">🛒</div>
+            <div class="icon">📝</div>
             <h3>Gestion des commandes</h3>
-            <p>Enregistrer et suivre les commandes des clients.</p>
-        </a>
-        <?php endif; ?>
-
-        <?php if (autorise("paiements", $acces)): ?>
-        <a href="paiements.php" class="dashboard-card">
-            <div class="icon">💳</div>
-            <h3>Gestion des paiements</h3>
-            <p>Encaisser les commandes, gérer les modes de paiement et consulter les paiements effectués.</p>
+            <p>Créer, suivre et gérer les commandes.</p>
         </a>
         <?php endif; ?>
 
@@ -386,7 +361,7 @@ $voirStatistiques = ($role === "Gerant");
         <a href="clients.php" class="dashboard-card">
             <div class="icon">👥</div>
             <h3>Gestion des clients</h3>
-            <p>Ajouter et consulter les informations des clients.</p>
+            <p>Enregistrer et consulter les informations des clients.</p>
         </a>
         <?php endif; ?>
 
@@ -394,15 +369,15 @@ $voirStatistiques = ($role === "Gerant");
         <a href="tables.php" class="dashboard-card">
             <div class="icon">🪑</div>
             <h3>Gestion des tables</h3>
-            <p>Gérer les tables, leur capacité et leur disponibilité.</p>
+            <p>Consulter et gérer les tables du restaurant.</p>
         </a>
         <?php endif; ?>
 
         <?php if (autorise("stock", $acces)): ?>
         <a href="stock.php" class="dashboard-card">
             <div class="icon">📦</div>
-            <h3>Gestion des stocks</h3>
-            <p>Gérer les ingrédients, les quantités et les mouvements de stock.</p>
+            <h3>Gestion du stock</h3>
+            <p>Suivre les ingrédients et les mouvements de stock.</p>
         </a>
         <?php endif; ?>
 
@@ -410,48 +385,45 @@ $voirStatistiques = ($role === "Gerant");
         <a href="fournisseurs.php" class="dashboard-card">
             <div class="icon">🚚</div>
             <h3>Gestion des fournisseurs</h3>
-            <p>Enregistrer les fournisseurs et gérer leurs coordonnées.</p>
+            <p>Enregistrer et gérer les fournisseurs.</p>
         </a>
         <?php endif; ?>
 
         <?php if (autorise("recettes", $acces)): ?>
         <a href="recettes.php" class="dashboard-card">
-            <div class="icon">🍲</div>
+            <div class="icon">📋</div>
             <h3>Gestion des recettes</h3>
-            <p>Associer les ingrédients aux plats et définir les quantités nécessaires.</p>
+            <p>Gérer les ingrédients nécessaires à chaque plat.</p>
         </a>
         <?php endif; ?>
 
         <?php if (autorise("employes", $acces)): ?>
         <a href="employes.php" class="dashboard-card">
-            <div class="icon">🧑‍💼</div>
+            <div class="icon">👨‍🍳</div>
             <h3>Gestion des employés</h3>
-            <p>Ajouter des employés, attribuer les rôles et gérer les accès.</p>
+            <p>Gérer les employés, les comptes et les rôles.</p>
         </a>
         <?php endif; ?>
-        
-<?php if (autorise("reservations", $acces)): ?>
-<a href="reservations.php" class="dashboard-card">
-    <div class="icon">📅</div>
-    <h3>Gestion des réservations</h3>
-    <p>Enregistrer et suivre les réservations des clients.</p>
-</a>
-<?php endif; ?>
 
-        <?php if (empty($acces)): ?>
-        <div class="aucun-acces">
-            Aucun module ne vous est actuellement attribué.
-            Contactez le Gérant.
-        </div>
+        <?php if (autorise("paiements", $acces)): ?>
+        <a href="paiements.php" class="dashboard-card">
+            <div class="icon">💳</div>
+            <h3>Gestion des paiements</h3>
+            <p>Encaisser les commandes et consulter les paiements.</p>
+        </a>
         <?php endif; ?>
 
-    </div>
+        <?php if (autorise("reservations", $acces)): ?>
+        <a href="reservations.php" class="dashboard-card">
+            <div class="icon">📅</div>
+            <h3>Gestion des réservations</h3>
+            <p>Enregistrer, confirmer et suivre les réservations des clients.</p>
+        </a>
+        <?php endif; ?>
 
-</div>
+    </section>
 
-<footer>
-    Gestion Restaurant © <?= date("Y") ?> - Tous droits réservés
-</footer>
+</main>
 
 </body>
 </html>
